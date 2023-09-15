@@ -44,6 +44,21 @@ enum AppSetting: CaseIterable {
         case .개인시간: return .systemCyan
         }
     }
+
+    var secondaryText: String? {
+        switch self {
+        case .업무: return "09:00 ~ 06:00"
+        default: return nil
+        }
+    }
+
+    var accessoryText: String? {
+        switch self {
+        case .방해금지모드: return "켬"
+        case .개인시간: return "설정"
+        default: return nil
+        }
+    }
 }
 
 final class AppSettingViewController: UIViewController {
@@ -53,6 +68,7 @@ final class AppSettingViewController: UIViewController {
     private lazy var collectionView: UICollectionView = {
         // lazy 키워드를 통해 뷰컨의 프로퍼티, 메소드를 초기화 전에 사용할 수 있게 함
         // lazy 키워드를 사용한 프로퍼티의 메모리 로드 시점은 초기화 이후 처음 접근하는 시점이므로 가능한 것
+        // layout(CompositionalLayout - List)을 만들어서 이걸로 컬렉션뷰를 초기화!
         let layout = createLayout()
         let collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
         return collectionView
@@ -61,46 +77,68 @@ final class AppSettingViewController: UIViewController {
     private lazy var dataSource = self.createDiffableDataSource()
 
     private func createLayout() -> UICollectionViewLayout {
+
         // CompositionalLayout의 List를 사용
         // 1. Layout Configuration을 생성(List, insetGrouped)
+        // layout configuration에서 layout(collectionView)에 대한 UI속성이나 액션 설정이 가능하다.
         var configuration = UICollectionLayoutListConfiguration(appearance: .insetGrouped)
         configuration.showsSeparators = true
         configuration.backgroundColor = .systemBackground
 
+        // -- leadingSwipeAction도 줄 수 있고 --
+        // configuration.leadingSwipeActionsConfigurationProvider
+
+        // -- trailingSwipeAction도 줄 수 있다 --
+        // configuration.trailingSwipeActionsConfigurationProvider
+
         // 2. Layout Configuration을 사용해서 CompositionalLayout을 생성
         let layout = UICollectionViewCompositionalLayout.list(using: configuration)
+
         return layout
     }
 
     private func createCellRegistration() -> UICollectionView.CellRegistration<
         UICollectionViewListCell, AppSettingData
     > {
+
         // 3. Cell Registration 클로저 생성
-        // 제네릭으로 셀 타입, 셀에 넣을 데이터 타입을 명시해야 한다.
-        // 클로저의 매개변수로는 셀, 인덱스패스, 데이터가 있음.
+        // 제네릭으로 <셀 타입, 셀에 넣을 데이터 타입>을 명시해야 한다.
+        // 클로저의 매개변수로는 (셀, 인덱스패스, 데이터)가 있음.
         let cellRegistration = UICollectionView.CellRegistration<
             UICollectionViewListCell, AppSettingData
         > { cell, indexPath, itemIdentifier in
 
-            // 셀의 content 영역 configuration
-            var contentConfiguration = UIListContentConfiguration.valueCell()
+            // 셀의 content 영역 configuration --
+
+            var contentConfiguration = UIListContentConfiguration.subtitleCell()
             contentConfiguration.image = itemIdentifier.appSetting.image
             contentConfiguration.imageProperties.tintColor = itemIdentifier
                 .appSetting
                 .imageTintColor
             contentConfiguration.text = itemIdentifier.appSetting.title
+            if let secondaryText = itemIdentifier.appSetting.secondaryText {
+                contentConfiguration.secondaryText = secondaryText
+            }
+            contentConfiguration.textToSecondaryTextVerticalPadding = 4.0
+            contentConfiguration.textProperties.color = .label
+            contentConfiguration.imageToTextPadding = 30.0
 
             // contentConfiguration 등록
             cell.contentConfiguration = contentConfiguration
 
-            // 섹션(background) configuration
+            // 섹션(background) configuration --
             var backgroundConfiguration = UIBackgroundConfiguration.listGroupedCell()
-            backgroundConfiguration.backgroundColor = .lightGray
             backgroundConfiguration.cornerRadius = 10
+            backgroundConfiguration.backgroundColor = .secondarySystemBackground
 
             // background configuration 등록
             cell.backgroundConfiguration = backgroundConfiguration
 
+            // cell accesories 설정
+            cell.accessories = [.disclosureIndicator()]
+            if let detailText = itemIdentifier.appSetting.accessoryText {
+                cell.accessories.append(.label(text: detailText))
+            }
         }
 
         return cellRegistration
@@ -111,7 +149,8 @@ final class AppSettingViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         // Do any additional setup after loading the view.
-        view.backgroundColor = .systemBackground
+
+        configureUI()
         configureLayout()
 
         var snapshot = NSDiffableDataSourceSnapshot<Int, AppSettingData>()
@@ -145,6 +184,10 @@ final class AppSettingViewController: UIViewController {
         }
 
         return dataSource
+    }
+
+    private func configureUI() {
+        view.backgroundColor = .systemBackground
     }
 
     private func configureLayout() {
