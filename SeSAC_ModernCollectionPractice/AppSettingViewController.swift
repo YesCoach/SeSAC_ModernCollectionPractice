@@ -14,7 +14,8 @@ enum Item: Hashable {
 
 struct Section: Hashable {
     let items: [Item]
-    let title: String?
+    let headerTitle: String?
+    let footerTitle: String?
 }
 
 struct AppSettingData: Hashable {
@@ -94,6 +95,8 @@ final class AppSettingViewController: UIViewController {
         var configuration = UICollectionLayoutListConfiguration(appearance: .insetGrouped)
         configuration.showsSeparators = true
         configuration.backgroundColor = .systemBackground
+        configuration.headerMode = .supplementary
+        configuration.footerMode = .supplementary
 
         // -- leadingSwipeAction도 줄 수 있고 --
         // configuration.leadingSwipeActionsConfigurationProvider
@@ -172,14 +175,49 @@ final class AppSettingViewController: UIViewController {
         return cellRegistration
     }
 
+    private func makeSectionHeaderRegistration() -> UICollectionView.SupplementaryRegistration<
+        UICollectionViewListCell
+    > {
+        // Section별 Header를 구성하기 위한 SupplementaryRegistration
+        return UICollectionView.SupplementaryRegistration<UICollectionViewListCell>(
+            elementKind: UICollectionView.elementKindSectionHeader
+        ) { [weak self] (headerView, _, indexPath) in
+            var content = UIListContentConfiguration.groupedHeader()
+            content.text = self?.sections[indexPath.section].headerTitle
+            content.textProperties.color = .secondaryLabel
+            content.textProperties.font = .systemFont(ofSize: 14.0, weight: .regular)
+            headerView.contentConfiguration = content
+        }
+    }
+
+    private func makeSectionFooterRegistration() -> UICollectionView.SupplementaryRegistration<
+        UICollectionViewListCell
+    > {
+        // Section Footer 구성
+        return UICollectionView.SupplementaryRegistration<UICollectionViewListCell>(
+            elementKind: UICollectionView.elementKindSectionFooter
+        ) { [weak self] (footerView, _, indexPath) in
+            var content = UIListContentConfiguration.groupedFooter()
+            content.text = self?.sections[indexPath.section].footerTitle
+            content.textProperties.color = .secondaryLabel
+            content.textProperties.font = .systemFont(ofSize: 14.0, weight: .regular)
+            footerView.contentConfiguration = content
+        }
+    }
+
     private let sections = [
         Section(
             items: AppSetting
                 .allCases
                 .map { Item.setting(AppSettingData(appSetting: $0, status: "")) },
-            title: "모드설정"
+            headerTitle: "모드설정",
+            footerTitle: "집중 모드에서는 경고 및 알림 소리가 울리지 않습니다."
         ),
-        Section(items: [.toggle("모든 기기에서 공유")], title: "")
+        Section(
+            items: [.toggle("모든 기기에서 공유")],
+            headerTitle: "",
+            footerTitle: "이 기기에서 집중 모드를 켜면 사용자의 다른 기기에서도 집중모드가 켜집니다."
+        )
     ]
 
     override func viewDidLoad() {
@@ -218,6 +256,26 @@ final class AppSettingViewController: UIViewController {
                 for: indexPath,
                 item: itemIdentifier
             )
+        }
+
+        // 세션별 헤더 설정
+        // 메서드로 생성한 SupplementaryRegistration를 통해 supplementaryViewProvider를 구성한다.
+        let headerCellRegistration = makeSectionHeaderRegistration()
+        let footerCellRegistration = makeSectionFooterRegistration()
+
+        dataSource.supplementaryViewProvider = { (collectionView, elementKind, indexPath) ->
+            UICollectionReusableView? in
+            if elementKind == UICollectionView.elementKindSectionHeader {
+                return collectionView.dequeueConfiguredReusableSupplementary(
+                    using: headerCellRegistration, for: indexPath
+                )
+            } else if elementKind == UICollectionView.elementKindSectionFooter {
+                return collectionView.dequeueConfiguredReusableSupplementary(
+                    using: footerCellRegistration, for: indexPath
+                )
+            } else {
+                return nil
+            }
         }
 
         return dataSource
