@@ -7,6 +7,16 @@
 
 import UIKit
 
+enum Item: Hashable {
+    case setting(AppSettingData)
+    case toggle(String)
+}
+
+struct Section: Hashable {
+    let items: [Item]
+    let title: String?
+}
+
 struct AppSettingData: Hashable {
     let appSetting: AppSetting
     var status: String
@@ -98,33 +108,15 @@ final class AppSettingViewController: UIViewController {
     }
 
     private func createCellRegistration() -> UICollectionView.CellRegistration<
-        UICollectionViewListCell, AppSettingData
+        UICollectionViewListCell, Item
     > {
 
         // 3. Cell Registration 클로저 생성
         // 제네릭으로 <셀 타입, 셀에 넣을 데이터 타입>을 명시해야 한다.
         // 클로저의 매개변수로는 (셀, 인덱스패스, 데이터)가 있음.
         let cellRegistration = UICollectionView.CellRegistration<
-            UICollectionViewListCell, AppSettingData
+            UICollectionViewListCell, Item
         > { cell, indexPath, itemIdentifier in
-
-            // 셀의 content 영역 configuration --
-
-            var contentConfiguration = UIListContentConfiguration.subtitleCell()
-            contentConfiguration.image = itemIdentifier.appSetting.image
-            contentConfiguration.imageProperties.tintColor = itemIdentifier
-                .appSetting
-                .imageTintColor
-            contentConfiguration.text = itemIdentifier.appSetting.title
-            if let secondaryText = itemIdentifier.appSetting.secondaryText {
-                contentConfiguration.secondaryText = secondaryText
-            }
-            contentConfiguration.textToSecondaryTextVerticalPadding = 4.0
-            contentConfiguration.textProperties.color = .label
-            contentConfiguration.imageToTextPadding = 30.0
-
-            // contentConfiguration 등록
-            cell.contentConfiguration = contentConfiguration
 
             // 섹션(background) configuration --
             var backgroundConfiguration = UIBackgroundConfiguration.listGroupedCell()
@@ -134,17 +126,61 @@ final class AppSettingViewController: UIViewController {
             // background configuration 등록
             cell.backgroundConfiguration = backgroundConfiguration
 
-            // cell accesories 설정
-            cell.accessories = [.disclosureIndicator()]
-            if let detailText = itemIdentifier.appSetting.accessoryText {
-                cell.accessories.append(.label(text: detailText))
+            var contentConfiguration = UIListContentConfiguration.subtitleCell()
+
+            // 셀의 content 영역 configuration --
+            switch itemIdentifier {
+            case .setting(let item):
+                contentConfiguration.image = item.appSetting.image
+                contentConfiguration.imageProperties.tintColor = item
+                    .appSetting
+                    .imageTintColor
+                contentConfiguration.text = item.appSetting.title
+                if let secondaryText = item.appSetting.secondaryText {
+                    contentConfiguration.secondaryText = secondaryText
+                }
+                contentConfiguration.textToSecondaryTextVerticalPadding = 4.0
+                contentConfiguration.textProperties.color = .label
+                contentConfiguration.imageToTextPadding = 30.0
+
+                // contentConfiguration 등록
+                cell.contentConfiguration = contentConfiguration
+
+                // cell accesories 설정
+                cell.accessories = [.disclosureIndicator()]
+                if let detailText = item.appSetting.accessoryText {
+                    cell.accessories.append(.label(text: detailText))
+                }
+
+            case .toggle(let text):
+                contentConfiguration.text = text
+
+                cell.contentConfiguration = contentConfiguration
+
+                // cell accesories 설정
+                let switchView = UISwitch()
+
+                cell.accessories = [
+                    .disclosureIndicator(),
+                    .customView(
+                        configuration: .init(customView: switchView, placement: .trailing())
+                    )
+                ]
             }
         }
 
         return cellRegistration
     }
 
-    private let items = AppSetting.allCases.map { AppSettingData(appSetting: $0, status: "") }
+    private let sections = [
+        Section(
+            items: AppSetting
+                .allCases
+                .map { Item.setting(AppSettingData(appSetting: $0, status: "")) },
+            title: "모드설정"
+        ),
+        Section(items: [.toggle("모든 기기에서 공유")], title: "")
+    ]
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -153,16 +189,19 @@ final class AppSettingViewController: UIViewController {
         configureUI()
         configureLayout()
 
-        var snapshot = NSDiffableDataSourceSnapshot<Int, AppSettingData>()
+        var snapshot = NSDiffableDataSourceSnapshot<Section, Item>()
 
-        snapshot.appendSections([0])
-        snapshot.appendItems(items, toSection: 0)
+        snapshot.appendSections(sections)
 
-        dataSource.apply(snapshot)
+        sections.forEach {
+            var sectionSnapShot = NSDiffableDataSourceSectionSnapshot<Item>()
+            sectionSnapShot.append($0.items)
+            dataSource.apply(sectionSnapShot, to: $0)
+        }
     }
 
     private func createDiffableDataSource() -> UICollectionViewDiffableDataSource<
-        Int, AppSettingData
+        Section, Item
     > {
         // DiffableDataSource
         // collectionView에 적용된 cellRegistration을 활용해서,
@@ -170,17 +209,15 @@ final class AppSettingViewController: UIViewController {
 
         let cellRegistration = createCellRegistration()
 
-        let dataSource = UICollectionViewDiffableDataSource<Int, AppSettingData>(
+        let dataSource = UICollectionViewDiffableDataSource<Section, Item>(
             collectionView: collectionView
         ) { collectionView, indexPath, itemIdentifier in
 
-            let cell = collectionView.dequeueConfiguredReusableCell(
+            return collectionView.dequeueConfiguredReusableCell(
                 using: cellRegistration,
                 for: indexPath,
                 item: itemIdentifier
             )
-
-            return cell
         }
 
         return dataSource
@@ -188,6 +225,7 @@ final class AppSettingViewController: UIViewController {
 
     private func configureUI() {
         view.backgroundColor = .systemBackground
+        title = "집중 모드"
     }
 
     private func configureLayout() {
